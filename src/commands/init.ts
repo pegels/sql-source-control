@@ -13,7 +13,9 @@ export default class Init {
    * Invoke action.
    */
   invoke() {
-    const webConfigConns = Config.getConnectionsFromWebConfig(this.options.webconfig);
+    const webConfigConns = Config.getConnectionsFromWebConfig(
+      this.options.webconfig
+    );
     const conn = new Connection();
 
     if (!this.options.force && Config.doesDefaultExist()) {
@@ -32,7 +34,9 @@ export default class Init {
       return;
     }
 
-    inquirer.prompt(this.getQuestions(conn, !!webConfigConns)).then(answers => this.writeFiles(answers));
+    return inquirer
+      .prompt(this.getQuestions(conn, !!webConfigConns))
+      .then(answers => this.writeFiles(answers));
   }
 
   /**
@@ -41,7 +45,7 @@ export default class Init {
    * @param conn Connection object to use for default values.
    */
   private getQuestions(conn: Connection, showWebConfig: boolean) {
-    const questions: inquirer.Questions = [
+    const questions: inquirer.QuestionCollection = [
       {
         choices: () => this.getPathChoices(showWebConfig),
         message: 'Where would you like to store connections?',
@@ -58,6 +62,7 @@ export default class Init {
         default: conn.port || undefined,
         message: 'Server port.',
         name: 'port',
+        type: 'number',
         when: answers => answers.path !== PathChoices.WebConfig
       },
       {
@@ -96,7 +101,7 @@ export default class Init {
    * @param showWebConfig Indicates if Web.config choice should be available.
    */
   private getPathChoices(showWebConfig: boolean) {
-    const choices: inquirer.ChoiceType[] = [
+    const choices: inquirer.ChoiceOptions[] = [
       {
         name: 'Main configuration file.',
         value: PathChoices.SscConfig

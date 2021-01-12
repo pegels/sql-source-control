@@ -1,4 +1,3 @@
-/* tslint:disable:max-line-length */
 import { EOL } from 'os';
 import { isBoolean, isDate, isNull, isString } from 'ts-util-is';
 
@@ -42,17 +41,17 @@ export default class MSSQLGenerator {
 
     switch (this.config.idempotency.data) {
       case 'delete':
-        output += `DELETE FROM ${item.name}` + EOL;
+        output += `DELETE FROM [${item.schema}].[${item.name}]` + EOL;
         output += EOL;
         break;
       case 'delete-and-reseed':
-        output += `DELETE FROM ${item.name}`;
+        output += `DELETE FROM [${item.schema}].[${item.name}]`;
         output += EOL;
-        output += `DBCC CHECKIDENT ('${item.name}', RESEED, 0)`;
+        output += `DBCC CHECKIDENT ('[${item.schema}].[${item.name}]', RESEED, 0)`;
         output += EOL;
         break;
       case 'truncate':
-        output += `TRUNCATE TABLE ${item.name}`;
+        output += `TRUNCATE TABLE [${item.schema}].[${item.name}]`;
         output += EOL;
         break;
     }
@@ -60,7 +59,7 @@ export default class MSSQLGenerator {
     output += EOL;
 
     if (item.hasIdentity) {
-      output += `SET IDENTITY_INSERT ${item.name} ON`;
+      output += `SET IDENTITY_INSERT [${item.schema}].[${item.name}] ON`;
       output += EOL;
       output += EOL;
     }
@@ -70,13 +69,13 @@ export default class MSSQLGenerator {
       const columns = keys.join(', ');
       const values = keys.map(key => this.safeValue(row[key])).join(', ');
 
-      output += `INSERT INTO ${item.name} (${columns}) VALUES (${values})`;
+      output += `INSERT INTO [${item.schema}].[${item.name}] (${columns}) VALUES (${values})`;
       output += EOL;
     });
 
     if (item.hasIdentity) {
       output += EOL;
-      output += `SET IDENTITY_INSERT ${item.name} OFF`;
+      output += `SET IDENTITY_INSERT [${item.schema}].[${item.name}] OFF`;
       output += EOL;
     }
 
@@ -282,9 +281,12 @@ export default class MSSQLGenerator {
         output += EOL;
         output += this.indent() + 'SELECT 1 FROM sys.types AS t';
         output += EOL;
-        output += this.indent() + 'JOIN sys.schemas s ON t.schema_id = s.schema_id';
+        output +=
+          this.indent() + 'JOIN sys.schemas s ON t.schema_id = s.schema_id';
         output += EOL;
-        output += this.indent() + `WHERE t.name = '${item.name}' AND s.name = '${item.schema}'`;
+        output +=
+          this.indent() +
+          `WHERE t.name = '${item.name}' AND s.name = '${item.schema}'`;
         output += EOL;
         output += ')';
         output += EOL;
@@ -298,9 +300,12 @@ export default class MSSQLGenerator {
         output += EOL;
         output += this.indent() + 'SELECT 1 FROM sys.types AS t';
         output += EOL;
-        output += this.indent() + 'JOIN sys.schemas s ON t.schema_id = s.schema_id';
+        output +=
+          this.indent() + 'JOIN sys.schemas s ON t.schema_id = s.schema_id';
         output += EOL;
-        output += this.indent() + `WHERE t.name = '${item.name}' AND s.name = '${item.schema}'`;
+        output +=
+          this.indent() +
+          `WHERE t.name = '${item.name}' AND s.name = '${item.schema}'`;
         output += EOL;
         output += ')';
         output += EOL;
@@ -345,9 +350,12 @@ export default class MSSQLGenerator {
         output += EOL;
         output += this.indent() + 'SELECT 1 FROM sys.table_types AS t';
         output += EOL;
-        output += this.indent() + 'JOIN sys.schemas s ON t.schema_id = s.schema_id';
+        output +=
+          this.indent() + 'JOIN sys.schemas s ON t.schema_id = s.schema_id';
         output += EOL;
-        output += this.indent() + `WHERE t.name = '${item.name}' AND s.name = '${item.schema}'`;
+        output +=
+          this.indent() +
+          `WHERE t.name = '${item.name}' AND s.name = '${item.schema}'`;
         output += EOL;
         output += ')';
         output += EOL;
@@ -489,6 +497,12 @@ export default class MSSQLGenerator {
 
     if (item.is_computed) {
       output += ` AS ${item.formula}`;
+
+      if (item.is_persisted) {
+        output += ' PERSISTED';
+        output += item.is_nullable ? ' NULL' : ' NOT NULL';
+      }
+
       return output;
     }
 
@@ -526,11 +540,16 @@ export default class MSSQLGenerator {
     output += item.is_nullable ? ' NULL' : ' NOT NULL';
 
     if (item.definition) {
+      if (this.config.includeConstraintName && item.default_name) {
+        output += ` CONSTRAINT [${item.default_name}]`;
+      }
+
       output += ` DEFAULT${item.definition}`;
     }
 
     if (item.is_identity) {
-      output += ` IDENTITY(${item.seed_value || 0}, ${item.increment_value || 1})`;
+      output += ` IDENTITY(${item.seed_value || 0}, ${item.increment_value ||
+        1})`;
     }
 
     return output;
@@ -606,7 +625,11 @@ export default class MSSQLGenerator {
     output += 'BEGIN';
     output += EOL;
 
-    output += this.indent() + `ALTER TABLE ${objectId} WITH ${item.is_not_trusted ? 'NOCHECK' : 'CHECK'}`;
+    output +=
+      this.indent() +
+      `ALTER TABLE ${objectId} WITH ${
+        item.is_not_trusted ? 'NOCHECK' : 'CHECK'
+      }`;
     output += ` ADD CONSTRAINT [${item.name}] FOREIGN KEY ([${item.column}])`;
     output += ` REFERENCES ${parentObjectId} ([${item.reference}])`;
 
@@ -635,7 +658,8 @@ export default class MSSQLGenerator {
     }
 
     output += EOL;
-    output += this.indent() + `ALTER TABLE ${objectId} CHECK CONSTRAINT [${item.name}]`;
+    output +=
+      this.indent() + `ALTER TABLE ${objectId} CHECK CONSTRAINT [${item.name}]`;
     output += EOL;
     output += 'END';
     output += EOL;
@@ -653,9 +677,7 @@ export default class MSSQLGenerator {
     const objectId = `[${first.schema}].[${first.table}]`;
     let output = '';
 
-    output += `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('${objectId}') AND name = '${
-      first.name
-    }')`;
+    output += `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('${objectId}') AND name = '${first.name}')`;
     output += EOL;
     output += 'CREATE';
 
@@ -663,7 +685,7 @@ export default class MSSQLGenerator {
       output += ' UNIQUE';
     }
 
-    output += ` NONCLUSTERED INDEX [${first.name}] ON ${objectId}`;
+    output += ` ${first.type} INDEX [${first.name}] ON ${objectId}`;
     output += '(';
 
     if (items.length > 1) {
@@ -705,7 +727,11 @@ export default class MSSQLGenerator {
    * @param steps Steps from query.
    * @param schedules Schedules from query.
    */
-  private addJob(job: SqlJob, steps: SqlJobStep[], schedules: SqlJobSchedule[]) {
+  private addJob(
+    job: SqlJob,
+    steps: SqlJobStep[],
+    schedules: SqlJobSchedule[]
+  ) {
     let output = '';
 
     // job
@@ -717,11 +743,14 @@ export default class MSSQLGenerator {
     output += EOL;
     output += this.indent() + `@description = N'${job.description}',`;
     output += EOL;
-    output += this.indent() + `@notify_level_eventlog = ${job.notify_level_eventlog},`;
+    output +=
+      this.indent() + `@notify_level_eventlog = ${job.notify_level_eventlog},`;
     output += EOL;
-    output += this.indent() + `@notify_level_email = ${job.notify_level_email},`;
+    output +=
+      this.indent() + `@notify_level_email = ${job.notify_level_email},`;
     output += EOL;
-    output += this.indent() + `@notify_level_netsend = ${job.notify_level_netsend},`;
+    output +=
+      this.indent() + `@notify_level_netsend = ${job.notify_level_netsend},`;
     output += EOL;
     output += this.indent() + `@notify_level_page = ${job.notify_level_page},`;
     output += EOL;
@@ -745,15 +774,20 @@ export default class MSSQLGenerator {
       output += EOL;
 
       if (step.additional_parameters) {
-        output += this.indent() + `@additional_parameters = N'${step.additional_parameters}',`;
+        output +=
+          this.indent() +
+          `@additional_parameters = N'${step.additional_parameters}',`;
         output += EOL;
       }
 
-      output += this.indent() + `@cmdexec_success_code = ${step.cmdexec_success_code},`;
+      output +=
+        this.indent() + `@cmdexec_success_code = ${step.cmdexec_success_code},`;
       output += EOL;
-      output += this.indent() + `@on_success_action = ${step.on_success_action},`;
+      output +=
+        this.indent() + `@on_success_action = ${step.on_success_action},`;
       output += EOL;
-      output += this.indent() + `@on_success_step_id = ${step.on_success_step_id},`;
+      output +=
+        this.indent() + `@on_success_step_id = ${step.on_success_step_id},`;
       output += EOL;
       output += this.indent() + `@on_fail_action = ${step.on_fail_action},`;
       output += EOL;
@@ -763,7 +797,9 @@ export default class MSSQLGenerator {
       output += EOL;
 
       if (step.database_user_name) {
-        output += this.indent() + `@database_user_name = N'${step.database_user_name}',`;
+        output +=
+          this.indent() +
+          `@database_user_name = N'${step.database_user_name}',`;
         output += EOL;
       }
 
@@ -786,7 +822,8 @@ export default class MSSQLGenerator {
       output += EOL;
 
       schedules.forEach(schedule => {
-        output += this.indent() + `@schedule_name = N'${schedule.schedule_name}',`;
+        output +=
+          this.indent() + `@schedule_name = N'${schedule.schedule_name}',`;
         output += EOL;
         output += this.indent() + `@enabled = ${schedule.enabled},`;
         output += EOL;
@@ -794,21 +831,32 @@ export default class MSSQLGenerator {
         output += EOL;
         output += this.indent() + `@freq_interval = ${schedule.freq_interval},`;
         output += EOL;
-        output += this.indent() + `@freq_subday_type = ${schedule.freq_subday_type},`;
+        output +=
+          this.indent() + `@freq_subday_type = ${schedule.freq_subday_type},`;
         output += EOL;
-        output += this.indent() + `@freq_subday_interval = ${schedule.freq_subday_interval},`;
+        output +=
+          this.indent() +
+          `@freq_subday_interval = ${schedule.freq_subday_interval},`;
         output += EOL;
-        output += this.indent() + `@freq_relative_interval = ${schedule.freq_relative_interval},`;
+        output +=
+          this.indent() +
+          `@freq_relative_interval = ${schedule.freq_relative_interval},`;
         output += EOL;
-        output += this.indent() + `@freq_recurrence_factor = ${schedule.freq_recurrence_factor},`;
+        output +=
+          this.indent() +
+          `@freq_recurrence_factor = ${schedule.freq_recurrence_factor},`;
         output += EOL;
-        output += this.indent() + `@active_start_date = ${schedule.active_start_date},`;
+        output +=
+          this.indent() + `@active_start_date = ${schedule.active_start_date},`;
         output += EOL;
-        output += this.indent() + `@active_end_date = ${schedule.active_end_date},`;
+        output +=
+          this.indent() + `@active_end_date = ${schedule.active_end_date},`;
         output += EOL;
-        output += this.indent() + `@active_start_time = ${schedule.active_start_time},`;
+        output +=
+          this.indent() + `@active_start_time = ${schedule.active_start_time},`;
         output += EOL;
-        output += this.indent() + `@active_end_time = ${schedule.active_end_time};`;
+        output +=
+          this.indent() + `@active_end_time = ${schedule.active_end_time};`;
         output += EOL;
       });
 

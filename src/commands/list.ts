@@ -1,5 +1,4 @@
-// @ts-ignore
-import * as Table from 'cli-table';
+const Table = require('cli-table');
 
 import Config from '../common/config';
 import { ListOptions } from './interfaces';

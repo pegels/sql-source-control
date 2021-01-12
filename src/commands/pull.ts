@@ -1,7 +1,7 @@
-import chalk from 'chalk';
+import chalk = require('chalk');
 import * as sql from 'mssql';
 import * as multimatch from 'multimatch';
-import ora from 'ora';
+import ora = require('ora');
 
 import Config from '../common/config';
 import FileUtility from '../common/file-utility';
@@ -56,7 +56,7 @@ export default class Pull {
     this.spinner.start(`Pulling from ${chalk.blue(conn.server)} ...`);
 
     // connect to db
-    new sql.ConnectionPool(conn)
+    return new sql.ConnectionPool(conn)
       .connect()
       .then(pool => {
         const queries: any[] = [
@@ -73,7 +73,7 @@ export default class Pull {
           queries.push(
             pool.request().query(jobsRead(conn.database)),
             pool.request().query(jobStepsRead(conn.database)),
-            pool.request().query(jobSchedulesRead(conn.database))
+            pool.request().query(jobSchedulesRead())
           );
         } else {
           queries.push(null, null, null);
@@ -92,15 +92,18 @@ export default class Pull {
 
             return Promise.all<any>(
               matched.map(item => {
-                const match = tables.find(table => item === `${table.schema}.${table.name}`);
+                const match = tables.find(
+                  table => item === `${table.schema}.${table.name}`
+                );
 
                 return pool
                   .request()
-                  .query(`SELECT * FROM ${item}`)
+                  .query(`SELECT * FROM [${match.schema}].[${match.name}]`)
                   .then(result => ({
                     hasIdentity: match.identity_count > 0,
-                    name: item,
-                    result
+                    name: match.name,
+                    result,
+                    schema: match.schema
                   }));
               })
             ).then(data => [...results, ...data]);
@@ -111,7 +114,9 @@ export default class Pull {
           });
       })
       .then(results => this.writeFiles(config, results))
-      .catch(error => this.spinner.fail(error));
+      .catch(error => {
+        this.spinner.fail(error);
+      });
   }
 
   /**
@@ -131,7 +136,9 @@ export default class Pull {
     const types: SqlType[] = results[6].recordset;
     const jobs: SqlJob[] = results[7] ? results[7].recordset : [];
     const jobSteps: SqlJobStep[] = results[8] ? results[8].recordset : [];
-    const jobSchedules: SqlJobSchedule[] = results[9] ? results[9].recordset : [];
+    const jobSchedules: SqlJobSchedule[] = results[9]
+      ? results[9].recordset
+      : [];
     const data: SqlDataResult[] = results.slice(10);
 
     const generator = new MSSQLGenerator(config);
@@ -192,7 +199,13 @@ export default class Pull {
     // tables
     tables.forEach(item => {
       const name = `${item.schema}.${item.name}.sql`;
-      const content = generator.table(item, columns, primaryKeys, foreignKeys, indexes);
+      const content = generator.table(
+        item,
+        columns,
+        primaryKeys,
+        foreignKeys,
+        indexes
+      );
 
       file.write(config.output.tables, name, content);
     });
@@ -219,7 +232,7 @@ export default class Pull {
 
     // data
     data.forEach(item => {
-      const name = `${item.name}.sql`;
+      const name = `${item.schema}.${item.name}.sql`;
       const content = generator.data(item);
 
       file.write(config.output.data, name, content);

@@ -1,9 +1,9 @@
-import chalk from 'chalk';
+import chalk = require('chalk');
 import * as fs from 'fs-extra';
 import * as glob from 'glob';
 import * as inquirer from 'inquirer';
 import * as sql from 'mssql';
-import ora from 'ora';
+import ora = require('ora');
 import { EOL } from 'os';
 
 import Config from '../common/config';
@@ -25,11 +25,13 @@ export default class Push {
     const config = new Config(this.options.config);
     const conn = config.getConnection(this.name);
 
-    inquirer
+    return inquirer
       .prompt<inquirer.Answers>([
         {
           message: [
-            `${chalk.yellow('WARNING!')} All local SQL files will be executed against the requested database.`,
+            `${chalk.yellow(
+              'WARNING!'
+            )} All local SQL files will be executed against the requested database.`,
             'This can not be undone!',
             'Make sure to backup your database first.',
             EOL,
@@ -46,8 +48,12 @@ export default class Push {
         }
       })
       .then(() => this.batch(config, conn))
-      .then(() => this.spinner.succeed('Successfully pushed!'))
-      .catch(error => this.spinner.fail(error));
+      .then(() => {
+        this.spinner.succeed('Successfully pushed!');
+      })
+      .catch(error => {
+        this.spinner.fail(error);
+      });
   }
 
   /**
